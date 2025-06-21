@@ -17,6 +17,7 @@ import {
   LogOut,
   Plus,
   Eye,
+  RefreshCw,
 } from "lucide-react"
 import { isAdminAuthenticated, logoutAdmin } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
@@ -35,6 +36,7 @@ interface AdminStats {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -50,11 +52,23 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("/api/admin/stats")
+      setLoading(true)
+      const response = await fetch("/api/admin/stats", {
+        cache: "no-store", // Evitar caché
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
       const result = await response.json()
 
       if (result.success) {
         setStats(result.data)
+        if (refreshing) {
+          toast({
+            title: "Datos actualizados",
+            description: "Las estadísticas se han actualizado correctamente",
+          })
+        }
       } else {
         toast({
           title: "Error",
@@ -70,7 +84,13 @@ export default function AdminDashboard() {
       })
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchStats()
   }
 
   const handleLogout = () => {
@@ -82,7 +102,7 @@ export default function AdminDashboard() {
     router.push("/admin")
   }
 
-  if (loading) {
+  if (loading && !stats) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
@@ -111,6 +131,15 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                variant="outline"
+                className="bg-black/20 text-white border-yellow-500/30 hover:bg-yellow-500/10"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Actualizando..." : "Actualizar"}
+              </Button>
               <Link href="/admin/reservations">
                 <Button
                   variant="outline"
@@ -136,8 +165,16 @@ export default function AdminDashboard() {
       <div className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">Bienvenido, Administrador</h2>
-          <p className="text-gray-300">Aquí tienes un resumen de la actividad de tu peluquería</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-2">Bienvenido, Administrador</h2>
+              <p className="text-gray-300">Aquí tienes un resumen de la actividad de tu peluquería</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-400">Última actualización:</p>
+              <p className="text-yellow-400 font-semibold">{new Date().toLocaleString("es-ES")}</p>
+            </div>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -292,6 +329,13 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Auto-refresh Notice */}
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-400">
+            💡 Tip: Usa el botón "Actualizar" para ver los cambios más recientes en las reservas
+          </p>
+        </div>
       </div>
     </div>
   )
