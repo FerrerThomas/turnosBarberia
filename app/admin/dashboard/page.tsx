@@ -18,6 +18,7 @@ import {
   Plus,
   Eye,
   RefreshCw,
+  Bug,
 } from "lucide-react"
 import { isAdminAuthenticated, logoutAdmin } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
@@ -37,6 +38,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState<string>("")
+  const [debugData, setDebugData] = useState<any>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -52,31 +55,47 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      setLoading(true)
-      const response = await fetch("/api/admin/stats", {
-        cache: "no-store", // Evitar caché
+      if (!refreshing) setLoading(true)
+
+      // Agregar múltiples parámetros para evitar caché
+      const timestamp = new Date().getTime()
+      const random = Math.random().toString(36).substring(7)
+      const response = await fetch(`/api/admin/stats?t=${timestamp}&r=${random}&_=${Date.now()}`, {
+        method: "GET",
         headers: {
-          "Cache-Control": "no-cache",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
+        // Forzar que no use caché del navegador
+        cache: "no-store",
       })
+
       const result = await response.json()
+      console.log("Dashboard stats response:", result)
+      console.log("Server timestamp:", result.timestamp)
+      console.log("Client timestamp:", new Date().toISOString())
 
       if (result.success) {
         setStats(result.data)
+        setLastUpdate(new Date().toLocaleString("es-ES"))
+
         if (refreshing) {
           toast({
-            title: "Datos actualizados",
-            description: "Las estadísticas se han actualizado correctamente",
+            title: "✅ Datos actualizados",
+            description: `Estadísticas actualizadas: ${result.data.total} reservas totales (${result.timestamp})`,
           })
         }
       } else {
+        console.error("Error in stats response:", result)
         toast({
           title: "Error",
-          description: "No se pudieron cargar las estadísticas",
+          description: result.error || "No se pudieron cargar las estadísticas",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("Error fetching stats:", error)
       toast({
         title: "Error de conexión",
         description: "No se pudo conectar con el servidor",
@@ -85,6 +104,22 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+  }
+
+  const fetchDebugData = async () => {
+    try {
+      const response = await fetch("/api/admin/debug")
+      const result = await response.json()
+      console.log("Debug data:", result)
+      setDebugData(result.data)
+
+      toast({
+        title: "Debug ejecutado",
+        description: "Revisa la consola para ver los datos de debug",
+      })
+    } catch (error) {
+      console.error("Error fetching debug data:", error)
     }
   }
 
@@ -132,6 +167,14 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <Button
+                onClick={fetchDebugData}
+                variant="outline"
+                className="bg-black/20 text-white border-red-500/30 hover:bg-red-500/10"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                Debug
+              </Button>
+              <Button
                 onClick={handleRefresh}
                 disabled={refreshing}
                 variant="outline"
@@ -172,10 +215,41 @@ export default function AdminDashboard() {
             </div>
             <div className="text-right">
               <p className="text-sm text-gray-400">Última actualización:</p>
-              <p className="text-yellow-400 font-semibold">{new Date().toLocaleString("es-ES")}</p>
+              <p className="text-yellow-400 font-semibold">{lastUpdate || "Cargando..."}</p>
             </div>
           </div>
         </div>
+
+        {/* Debug Info */}
+        {debugData && (
+          <Card className="bg-red-900/20 border border-red-500/30 mb-6">
+            <CardHeader>
+              <CardTitle className="text-red-400">Debug Info - Datos Reales de la Base de Datos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-white font-semibold mb-2">Estadísticas Calculadas:</h4>
+                  <pre className="text-white text-xs overflow-auto bg-black/20 p-2 rounded">
+                    {JSON.stringify(debugData.stats, null, 2)}
+                  </pre>
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2">Total Reservas en DB:</h4>
+                  <p className="text-yellow-400 text-2xl font-bold">{debugData.reservations?.length || 0}</p>
+                  <h4 className="text-white font-semibold mb-2 mt-4">Últimas 3 reservas:</h4>
+                  <div className="space-y-1">
+                    {debugData.reservations?.slice(-3).map((r: any, i: number) => (
+                      <div key={i} className="text-xs text-gray-300 bg-black/20 p-1 rounded">
+                        {r.date} {r.time} - {r.name} ({r.status})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Grid */}
         {stats && (
@@ -333,7 +407,7 @@ export default function AdminDashboard() {
         {/* Auto-refresh Notice */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-400">
-            💡 Tip: Usa el botón "Actualizar" para ver los cambios más recientes en las reservas
+            💡 Tip: Usa el botón "Debug" para ver los datos reales de la base de datos
           </p>
         </div>
       </div>

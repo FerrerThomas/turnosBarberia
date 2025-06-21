@@ -20,10 +20,21 @@ export async function GET(request: NextRequest) {
 
     const reservations = await ReservationService.getReservations(filters)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: reservations,
+      timestamp: new Date().toISOString(),
     })
+
+    // Headers anti-caché para Vercel
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+    response.headers.set("Pragma", "no-cache")
+    response.headers.set("Expires", "0")
+    response.headers.set("Surrogate-Control", "no-store")
+    response.headers.set("CDN-Cache-Control", "no-store")
+    response.headers.set("Vercel-CDN-Cache-Control", "no-store")
+
+    return response
   } catch (error) {
     console.error("Error fetching reservations:", error)
     return NextResponse.json(
