@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
-import { ArrowLeft, Clock, User, Check, Scissors, Loader2, CalendarIcon} from "lucide-react"
+import { ArrowLeft, Clock, User, Check, Scissors, Loader2, CalendarIcon } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { es } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
@@ -41,18 +41,26 @@ export default function ReservasPage() {
   // Cargar horarios disponibles cuando se selecciona una fecha
   useEffect(() => {
     if (selectedDate) {
-      fetchAvailableSlots(format(selectedDate, "yyyy-MM-dd"))
+      const dateString = format(selectedDate, "yyyy-MM-dd")
+      console.log("Selected date:", selectedDate)
+      console.log("Formatted date string:", dateString)
+      fetchAvailableSlots(dateString)
     }
   }, [selectedDate])
 
   const fetchAvailableSlots = async (date: string) => {
     try {
       setLoading(true)
+      console.log("Fetching available slots for date:", date)
+
       const response = await fetch(`/api/reservations/available-slots?date=${date}`)
       const result = await response.json()
 
+      console.log("Available slots response:", result)
+
       if (result.success) {
         setAvailableSlots(result.data.availableSlots)
+        console.log("Reserved times for", date, ":", result.data.reservedTimes)
       } else {
         toast({
           title: "Error",
@@ -74,6 +82,7 @@ export default function ReservasPage() {
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
+      console.log("Date selected:", date)
       setSelectedDate(date)
       setSelectedTime("")
       setStep(2)
@@ -100,13 +109,18 @@ export default function ReservasPage() {
     try {
       setLoading(true)
 
+      // Usar exactamente el mismo formato de fecha que se usó para consultar horarios
+      const dateString = format(selectedDate, "yyyy-MM-dd")
+
       const reservationData = {
-        date: format(selectedDate, "yyyy-MM-dd"),
+        date: dateString, // Usar el formato correcto
         time: selectedTime,
         name: formData.name.trim(),
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim(),
       }
+
+      console.log("Submitting reservation:", reservationData)
 
       const response = await fetch("/api/reservations", {
         method: "POST",
@@ -117,6 +131,7 @@ export default function ReservasPage() {
       })
 
       const result = await response.json()
+      console.log("Reservation response:", result)
 
       if (result.success) {
         setSubmittedReservation(reservationData)
@@ -255,20 +270,20 @@ export default function ReservasPage() {
 
           {/* Step 1: Date Selection */}
           {step === 1 && (
-          <Card className="bg-black/40 backdrop-blur-md border border-yellow-500/30">
-            <CardHeader>
-              <CardTitle className="flex items-center text-yellow-400 text-xl">
-                <CalendarIcon className="h-6 w-6 mr-3" /> {/* Cambiado de Calendar a CalendarIcon */}
-                Selecciona una fecha
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-center">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={handleDateSelect}
-                  disabled={(date) => date < new Date() || date < addDays(new Date(), -1)}
+            <Card className="bg-black/40 backdrop-blur-md border border-yellow-500/30">
+              <CardHeader>
+                <CardTitle className="flex items-center text-yellow-400 text-xl">
+                  <CalendarIcon className="h-6 w-6 mr-3" />
+                  Selecciona una fecha
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-center">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    disabled={(date) => date < new Date() || date < addDays(new Date(), -1)}
                     locale={es}
                     className="rounded-md border border-yellow-500/20 bg-black/20"
                     classNames={{
