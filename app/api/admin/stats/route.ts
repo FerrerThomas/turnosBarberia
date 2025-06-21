@@ -1,18 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { ReservationService } from "@/lib/reservations"
+import clientPromise from "@/lib/mongodb"
 import { format, subMonths, addDays } from "date-fns"
+
+// Forzar que esta función sea dinámica (no se cachee)
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("=== STATS API CALLED ===", new Date().toISOString())
+
     const now = new Date()
     const today = format(now, "yyyy-MM-dd")
     const currentMonth = format(now, "yyyy-MM")
     const lastMonth = format(subMonths(now, 1), "yyyy-MM")
 
-    // Obtener todas las reservas sin filtros
-    const allReservations = await ReservationService.getReservations({})
+    // Conectar directamente a MongoDB (sin usar el service)
+    const client = await clientPromise
+    const db = client.db("peluqueria")
+    const collection = db.collection("reservations")
 
+    // Obtener todas las reservas directamente
+    const allReservations = await collection.find({}).sort({ date: 1, time: 1 }).toArray()
+
+    console.log("=== DIRECT DB QUERY ===")
     console.log("Total reservations found:", allReservations.length)
+    console.log("Sample reservations:", allReservations.slice(0, 3))
 
     // Estadísticas generales
     const totalReservations = allReservations.length
@@ -20,22 +33,22 @@ export async function GET(request: NextRequest) {
     const cancelledReservations = allReservations.filter((r) => r.status === "cancelled").length
     const completedReservations = allReservations.filter((r) => r.status === "completed").length
 
-    // Reservas del mes actual (formato YYYY-MM)
+    // Reservas del mes actual
     const currentMonthReservations = allReservations.filter((r) => {
-      const reservationMonth = r.date.substring(0, 7) // Obtener YYYY-MM
+      const reservationMonth = r.date.substring(0, 7)
       return reservationMonth === currentMonth
     }).length
 
-    // Reservas del mes pasado (formato YYYY-MM)
+    // Reservas del mes pasado
     const lastMonthReservations = allReservations.filter((r) => {
-      const reservationMonth = r.date.substring(0, 7) // Obtener YYYY-MM
+      const reservationMonth = r.date.substring(0, 7)
       return reservationMonth === lastMonth
     }).length
 
-    // Reservas de hoy (formato exacto YYYY-MM-DD)
+    // Reservas de hoy
     const todayReservations = allReservations.filter((r) => r.date === today).length
 
-    // Próximas reservas (próximos 7 días, solo confirmadas)
+    // Próximas reservas
     const nextWeekDate = format(addDays(now, 7), "yyyy-MM-dd")
     const upcomingReservations = allReservations.filter((r) => {
       return r.date >= today && r.date <= nextWeekDate && r.status === "confirmed"
@@ -52,32 +65,46 @@ export async function GET(request: NextRequest) {
       upcoming: upcomingReservations,
     }
 
-    console.log("Calculated stats:", stats)
+    console.log("=== CALCULATED STATS ===")
+    console.log(stats)
 
-    // Crear respuesta con headers anti-caché más agresivos
-    const response = NextResponse.json({
+    const responseData = {
       success: true,
       data: stats,
       timestamp: new Date().toISOString(),
       serverTime: Date.now(),
-    })
+      debug: {
+        totalInDB: allReservations.length,
+        queryTime: new Date().toISOString(),
+        sampleData: allReservations.slice(0, 2),
+      },
+    }
 
-    // Headers anti-caché para Vercel
-    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+    console.log("=== SENDING RESPONSE ===", responseData)
+
+    const response = NextResponse.json(responseData)
+
+    // Headers anti-caché extremos
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
+    )
     response.headers.set("Pragma", "no-cache")
     response.headers.set("Expires", "0")
     response.headers.set("Surrogate-Control", "no-store")
     response.headers.set("CDN-Cache-Control", "no-store")
     response.headers.set("Vercel-CDN-Cache-Control", "no-store")
+    response.headers.set("X-Vercel-Cache", "MISS")
 
     return response
   } catch (error) {
-    console.error("Error fetching admin stats:", error)
+    console.error("=== ERROR IN STATS API ===", error)
     return NextResponse.json(
       {
         success: false,
         error: "Error al obtener estadísticas",
         details: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

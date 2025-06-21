@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string>("")
   const [debugData, setDebugData] = useState<any>(null)
+  const [serverDebug, setServerDebug] = useState<any>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -57,33 +58,39 @@ export default function AdminDashboard() {
     try {
       if (!refreshing) setLoading(true)
 
-      // Agregar múltiples parámetros para evitar caché
-      const timestamp = new Date().getTime()
-      const random = Math.random().toString(36).substring(7)
-      const response = await fetch(`/api/admin/stats?t=${timestamp}&r=${random}&_=${Date.now()}`, {
+      console.log("=== CLIENT: Fetching stats ===", new Date().toISOString())
+
+      // Crear URL única para evitar cualquier caché
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
+      const url = `/api/admin/stats?unique=${uniqueId}&t=${Date.now()}`
+
+      console.log("Fetching URL:", url)
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Cache-Control": "no-cache, no-store, must-revalidate",
           Pragma: "no-cache",
           Expires: "0",
         },
-        // Forzar que no use caché del navegador
         cache: "no-store",
       })
 
+      console.log("Response status:", response.status)
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
+
       const result = await response.json()
-      console.log("Dashboard stats response:", result)
-      console.log("Server timestamp:", result.timestamp)
-      console.log("Client timestamp:", new Date().toISOString())
+      console.log("=== CLIENT: Stats response ===", result)
 
       if (result.success) {
         setStats(result.data)
+        setServerDebug(result.debug)
         setLastUpdate(new Date().toLocaleString("es-ES"))
 
         if (refreshing) {
           toast({
             title: "✅ Datos actualizados",
-            description: `Estadísticas actualizadas: ${result.data.total} reservas totales (${result.timestamp})`,
+            description: `Stats: ${result.data.total} reservas | Server: ${result.debug?.totalInDB} en DB`,
           })
         }
       } else {
@@ -109,14 +116,17 @@ export default function AdminDashboard() {
 
   const fetchDebugData = async () => {
     try {
-      const response = await fetch("/api/admin/debug")
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
+      const response = await fetch(`/api/admin/debug?unique=${uniqueId}`, {
+        cache: "no-store",
+      })
       const result = await response.json()
       console.log("Debug data:", result)
       setDebugData(result.data)
 
       toast({
         title: "Debug ejecutado",
-        description: "Revisa la consola para ver los datos de debug",
+        description: `${result.data?.reservations?.length || 0} reservas encontradas en DB`,
       })
     } catch (error) {
       console.error("Error fetching debug data:", error)
@@ -172,7 +182,7 @@ export default function AdminDashboard() {
                 className="bg-black/20 text-white border-red-500/30 hover:bg-red-500/10"
               >
                 <Bug className="h-4 w-4 mr-2" />
-                Debug
+                Debug DB
               </Button>
               <Button
                 onClick={handleRefresh}
@@ -216,9 +226,42 @@ export default function AdminDashboard() {
             <div className="text-right">
               <p className="text-sm text-gray-400">Última actualización:</p>
               <p className="text-yellow-400 font-semibold">{lastUpdate || "Cargando..."}</p>
+              {serverDebug && <p className="text-xs text-gray-500">Server: {serverDebug.totalInDB} en DB</p>}
             </div>
           </div>
         </div>
+
+        {/* Server Debug Info */}
+        {serverDebug && (
+          <Card className="bg-blue-900/20 border border-blue-500/30 mb-6">
+            <CardHeader>
+              <CardTitle className="text-blue-400">Server Debug - Conexión Directa a DB</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-white font-semibold mb-2">Datos del Servidor:</h4>
+                  <p className="text-blue-400">
+                    Total en DB: <span className="text-white font-bold">{serverDebug.totalInDB}</span>
+                  </p>
+                  <p className="text-blue-400">
+                    Query Time: <span className="text-white text-xs">{serverDebug.queryTime}</span>
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold mb-2">Muestra de datos:</h4>
+                  <div className="space-y-1">
+                    {serverDebug.sampleData?.map((r: any, i: number) => (
+                      <div key={i} className="text-xs text-gray-300 bg-black/20 p-1 rounded">
+                        {r.date} {r.time} - {r.name} ({r.status})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Debug Info */}
         {debugData && (
@@ -407,7 +450,7 @@ export default function AdminDashboard() {
         {/* Auto-refresh Notice */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-400">
-            💡 Tip: Usa el botón "Debug" para ver los datos reales de la base de datos
+            💡 Tip: El panel azul muestra datos directos del servidor. Compara con las estadísticas del dashboard.
           </p>
         </div>
       </div>
