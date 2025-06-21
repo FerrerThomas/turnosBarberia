@@ -22,6 +22,19 @@ interface ReservationData {
   phone: string
 }
 
+// Función para formatear fecha desde string YYYY-MM-DD a DD/MM/YYYY
+const formatDateString = (dateString: string): string => {
+  const [year, month, day] = dateString.split("-")
+  return `${day}/${month}/${year}`
+}
+
+// Función para obtener el nombre del día de la semana
+const getDayName = (dateString: string): string => {
+  const [year, month, day] = dateString.split("-")
+  const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+  return format(date, "EEEE", { locale: es })
+}
+
 export default function ReservasPage() {
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedTime, setSelectedTime] = useState<string>("")
@@ -179,9 +192,9 @@ export default function ReservasPage() {
             <h2 className="text-2xl font-bold text-white mb-4">¡Reserva Confirmada!</h2>
             <div className="space-y-2 text-white mb-6">
               <p>
-                <strong className="text-yellow-400">Fecha:</strong>{" "}
-                {format(new Date(submittedReservation.date), "dd/MM/yyyy", { locale: es })}
+                <strong className="text-yellow-400">Fecha:</strong> {formatDateString(submittedReservation.date)}
               </p>
+              <p className="text-sm text-gray-300">{getDayName(submittedReservation.date)}</p>
               <p>
                 <strong className="text-yellow-400">Horario:</strong> {submittedReservation.time}
               </p>

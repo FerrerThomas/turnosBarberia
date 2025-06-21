@@ -37,9 +37,20 @@ import {
 } from "lucide-react"
 import { isAdminAuthenticated } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
 import type { Reservation } from "@/models/Reservation"
+
+// Función para formatear fecha desde string YYYY-MM-DD a DD/MM/YYYY
+const formatDateString = (dateString: string): string => {
+  const [year, month, day] = dateString.split("-")
+  return `${day}/${month}/${year}`
+}
+
+// Función para obtener el nombre del día de la semana
+const getDayName = (dateString: string): string => {
+  const [year, month, day] = dateString.split("-")
+  const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+  return date.toLocaleDateString("es-ES", { weekday: "long" })
+}
 
 export default function AdminReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -64,7 +75,7 @@ export default function AdminReservationsPage() {
     // Aplicar filtros de URL si existen
     const filterParam = searchParams.get("filter")
     if (filterParam === "today") {
-      const today = format(new Date(), "yyyy-MM-dd")
+      const today = new Date().toISOString().split("T")[0] // YYYY-MM-DD
       setDateFilter(today)
     }
   }, [router, searchParams])
@@ -392,7 +403,10 @@ export default function AdminReservationsPage() {
                   {filteredReservations.map((reservation) => (
                     <TableRow key={reservation._id?.toString()} className="border-gray-700">
                       <TableCell className="text-white">
-                        {format(new Date(reservation.date), "dd/MM/yyyy", { locale: es })}
+                        <div>
+                          <div className="font-medium">{formatDateString(reservation.date)}</div>
+                          <div className="text-xs text-gray-400 capitalize">{getDayName(reservation.date)}</div>
+                        </div>
                       </TableCell>
                       <TableCell className="text-white">{reservation.time}</TableCell>
                       <TableCell className="text-white">
@@ -466,12 +480,12 @@ export default function AdminReservationsPage() {
                   ))}
                 </TableBody>
               </Table>
-              {filteredReservations.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-gray-400">No se encontraron reservas con los filtros aplicados</p>
-                </div>
-              )}
             </div>
+            {filteredReservations.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-400">No se encontraron reservas con los filtros aplicados</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
