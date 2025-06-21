@@ -18,7 +18,6 @@ import {
   Plus,
   Eye,
   RefreshCw,
-  Bug,
 } from "lucide-react"
 import { isAdminAuthenticated, logoutAdmin } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
@@ -39,8 +38,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<string>("")
-  const [debugData, setDebugData] = useState<any>(null)
-  const [serverDebug, setServerDebug] = useState<any>(null)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -58,13 +55,9 @@ export default function AdminDashboard() {
     try {
       if (!refreshing) setLoading(true)
 
-      console.log("=== CLIENT: Fetching stats ===", new Date().toISOString())
-
       // Crear URL única para evitar cualquier caché
       const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
       const url = `/api/admin/stats?unique=${uniqueId}&t=${Date.now()}`
-
-      console.log("Fetching URL:", url)
 
       const response = await fetch(url, {
         method: "GET",
@@ -76,25 +69,19 @@ export default function AdminDashboard() {
         cache: "no-store",
       })
 
-      console.log("Response status:", response.status)
-      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
-
       const result = await response.json()
-      console.log("=== CLIENT: Stats response ===", result)
 
       if (result.success) {
         setStats(result.data)
-        setServerDebug(result.debug)
         setLastUpdate(new Date().toLocaleString("es-ES"))
 
         if (refreshing) {
           toast({
             title: "✅ Datos actualizados",
-            description: `Stats: ${result.data.total} reservas | Server: ${result.debug?.totalInDB} en DB`,
+            description: `Estadísticas actualizadas: ${result.data.total} reservas totales`,
           })
         }
       } else {
-        console.error("Error in stats response:", result)
         toast({
           title: "Error",
           description: result.error || "No se pudieron cargar las estadísticas",
@@ -111,25 +98,6 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
       setRefreshing(false)
-    }
-  }
-
-  const fetchDebugData = async () => {
-    try {
-      const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(7)}`
-      const response = await fetch(`/api/admin/debug?unique=${uniqueId}`, {
-        cache: "no-store",
-      })
-      const result = await response.json()
-      console.log("Debug data:", result)
-      setDebugData(result.data)
-
-      toast({
-        title: "Debug ejecutado",
-        description: `${result.data?.reservations?.length || 0} reservas encontradas en DB`,
-      })
-    } catch (error) {
-      console.error("Error fetching debug data:", error)
     }
   }
 
@@ -177,14 +145,6 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <Button
-                onClick={fetchDebugData}
-                variant="outline"
-                className="bg-black/20 text-white border-red-500/30 hover:bg-red-500/10"
-              >
-                <Bug className="h-4 w-4 mr-2" />
-                Debug DB
-              </Button>
-              <Button
                 onClick={handleRefresh}
                 disabled={refreshing}
                 variant="outline"
@@ -226,73 +186,9 @@ export default function AdminDashboard() {
             <div className="text-right">
               <p className="text-sm text-gray-400">Última actualización:</p>
               <p className="text-yellow-400 font-semibold">{lastUpdate || "Cargando..."}</p>
-              {serverDebug && <p className="text-xs text-gray-500">Server: {serverDebug.totalInDB} en DB</p>}
             </div>
           </div>
         </div>
-
-        {/* Server Debug Info */}
-        {serverDebug && (
-          <Card className="bg-blue-900/20 border border-blue-500/30 mb-6">
-            <CardHeader>
-              <CardTitle className="text-blue-400">Server Debug - Conexión Directa a DB</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-white font-semibold mb-2">Datos del Servidor:</h4>
-                  <p className="text-blue-400">
-                    Total en DB: <span className="text-white font-bold">{serverDebug.totalInDB}</span>
-                  </p>
-                  <p className="text-blue-400">
-                    Query Time: <span className="text-white text-xs">{serverDebug.queryTime}</span>
-                  </p>
-                </div>
-                <div>
-                  <h4 className="text-white font-semibold mb-2">Muestra de datos:</h4>
-                  <div className="space-y-1">
-                    {serverDebug.sampleData?.map((r: any, i: number) => (
-                      <div key={i} className="text-xs text-gray-300 bg-black/20 p-1 rounded">
-                        {r.date} {r.time} - {r.name} ({r.status})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Debug Info */}
-        {debugData && (
-          <Card className="bg-red-900/20 border border-red-500/30 mb-6">
-            <CardHeader>
-              <CardTitle className="text-red-400">Debug Info - Datos Reales de la Base de Datos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-white font-semibold mb-2">Estadísticas Calculadas:</h4>
-                  <pre className="text-white text-xs overflow-auto bg-black/20 p-2 rounded">
-                    {JSON.stringify(debugData.stats, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <h4 className="text-white font-semibold mb-2">Total Reservas en DB:</h4>
-                  <p className="text-yellow-400 text-2xl font-bold">{debugData.reservations?.length || 0}</p>
-                  <h4 className="text-white font-semibold mb-2 mt-4">Últimas 3 reservas:</h4>
-                  <div className="space-y-1">
-                    {debugData.reservations?.slice(-3).map((r: any, i: number) => (
-                      <div key={i} className="text-xs text-gray-300 bg-black/20 p-1 rounded">
-                        {r.date} {r.time} - {r.name} ({r.status})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Stats Grid */}
         {stats && (
@@ -447,10 +343,10 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Auto-refresh Notice */}
+        {/* Success Notice */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-400">
-            💡 Tip: El panel azul muestra datos directos del servidor. Compara con las estadísticas del dashboard.
+            ✅ Panel funcionando correctamente. Las estadísticas se actualizan en tiempo real.
           </p>
         </div>
       </div>

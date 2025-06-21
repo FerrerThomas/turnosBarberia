@@ -8,24 +8,18 @@ export const revalidate = 0
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("=== STATS API CALLED ===", new Date().toISOString())
-
     const now = new Date()
     const today = format(now, "yyyy-MM-dd")
     const currentMonth = format(now, "yyyy-MM")
     const lastMonth = format(subMonths(now, 1), "yyyy-MM")
 
-    // Conectar directamente a MongoDB (sin usar el service)
+    // Conectar directamente a MongoDB
     const client = await clientPromise
     const db = client.db("peluqueria")
     const collection = db.collection("reservations")
 
     // Obtener todas las reservas directamente
     const allReservations = await collection.find({}).sort({ date: 1, time: 1 }).toArray()
-
-    console.log("=== DIRECT DB QUERY ===")
-    console.log("Total reservations found:", allReservations.length)
-    console.log("Sample reservations:", allReservations.slice(0, 3))
 
     // Estadísticas generales
     const totalReservations = allReservations.length
@@ -65,26 +59,13 @@ export async function GET(request: NextRequest) {
       upcoming: upcomingReservations,
     }
 
-    console.log("=== CALCULATED STATS ===")
-    console.log(stats)
-
-    const responseData = {
+    const response = NextResponse.json({
       success: true,
       data: stats,
       timestamp: new Date().toISOString(),
-      serverTime: Date.now(),
-      debug: {
-        totalInDB: allReservations.length,
-        queryTime: new Date().toISOString(),
-        sampleData: allReservations.slice(0, 2),
-      },
-    }
+    })
 
-    console.log("=== SENDING RESPONSE ===", responseData)
-
-    const response = NextResponse.json(responseData)
-
-    // Headers anti-caché extremos
+    // Headers anti-caché
     response.headers.set(
       "Cache-Control",
       "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
@@ -94,17 +75,15 @@ export async function GET(request: NextRequest) {
     response.headers.set("Surrogate-Control", "no-store")
     response.headers.set("CDN-Cache-Control", "no-store")
     response.headers.set("Vercel-CDN-Cache-Control", "no-store")
-    response.headers.set("X-Vercel-Cache", "MISS")
 
     return response
   } catch (error) {
-    console.error("=== ERROR IN STATS API ===", error)
+    console.error("Error fetching admin stats:", error)
     return NextResponse.json(
       {
         success: false,
         error: "Error al obtener estadísticas",
         details: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
